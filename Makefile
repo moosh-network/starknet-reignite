@@ -1,5 +1,12 @@
 # Makefile for moosh_id project
 
+# --- Load Environment Variables ---
+# This allows Starkli to pick up STARKNET_PRIVATE_KEY and STARKNET_RPC automatically
+ifneq (,$(wildcard .env))
+    include .env
+    export
+endif
+
 # --- Configuration ---
 VENV_DIR = .venv
 FALCON_DIR = falcon
@@ -8,6 +15,12 @@ VENV_PYTHON = $(VENV_DIR)/bin/python
 VENV_PIP = $(VENV_DIR)/bin/pip
 N = 512  # Default polynomial degree
 
+# Starknet Config
+PROJECT_DIR = moosh_id
+# Update this filename if Scarb output differs (e.g. just moosh_id.contract_class.json)
+SIERRA_FILE = $(PROJECT_DIR)/target/dev/moosh_id_FalconSignatureVerifier.contract_class.json
+ACCOUNT_FILE = target/account.json
+
 # Directories
 TARGET_DIR = target
 KEY_DIR = $(TARGET_DIR)/keys
@@ -15,7 +28,7 @@ MSG_DIR = $(TARGET_DIR)/messages
 KEY_FILE = $(KEY_DIR)/key_n$(N).json
 MSG_FILE = $(MSG_DIR)/msg_n$(N).json
 
-.PHONY: all setup clean test key generate-arguments
+.PHONY: all setup clean test key generate-arguments starkli-account starkli-deploy
 
 # Create and setup virtual environment
 venv:
@@ -27,10 +40,13 @@ install-deps: venv
 	$(VENV_PIP) install --upgrade setuptools wheel
 	$(VENV_PIP) install -r requirements.txt
 
-# Setup dependencies
+# Alias setup to install-deps (fixes missing rule for 'key')
+setup: install-deps
+
+# Setup dependencies and build cairo
 build: install-deps
 	$(VENV_PIP) install -e $(FALCON_DIR)
-	cd moosh_id && scarb build
+	cd $(PROJECT_DIR) && scarb build
 
 # Create necessary directories
 $(KEY_DIR):
@@ -39,28 +55,28 @@ $(KEY_DIR):
 $(MSG_DIR):
 	mkdir -p $(MSG_DIR)
 
-# Generate key only (without running tests or setup)
+# Generate key only
 generate-arguments: $(KEY_DIR)
 	$(VENV_PYTHON) scripts/generate_inputs.py --n 512 --num_signatures 1
 	$(VENV_PYTHON) scripts/generate_inputs.py --n 1024 --num_signatures 1
-	@echo "Key generated and saved to moosh_id/tests/inputs/falcon_test_vectors_n512.cairo and moosh_id/tests/inputs/falcon_test_vectors_n1024.cairo"
+	@echo "Key generated."
 
-# Generate and register a key (with setup)
+# Generate and register a key
 key: setup
-	cd moosh_id && scarb test test_keyregistry
+	cd $(PROJECT_DIR) && scarb test test_keyregistry
 
-# Run all tests (experimental)
+# Run all tests
 test: key
-	cd moosh_id && scarb test
+	cd $(PROJECT_DIR) && scarb test
 
 test-only:
-	cd moosh_id && scarb test
+	cd $(PROJECT_DIR) && scarb test
 
-# Clean up generated files
+# Clean up
 clean:
 	rm -rf $(TARGET_DIR)
 	rm -rf $(VENV_DIR)
-	cd moosh_id && scarb clean
+	cd $(PROJECT_DIR) && scarb clean
 
 python-shell:
 	nix-shell -p python311
@@ -68,5 +84,21 @@ python-shell:
 app:
 	$(VENV_PYTHON) scripts/app.py
 
-# app:
-# 	nix-shell -p python311 --run 'make _app_internal'
+# --- Starknet Deployment (Targeted) ---
+
+# 1. Fetch Account Config (Creates account.json using address from .env)
+starkli-account:
+	@if [ -z "$(STARKNET_ADDRESS)" ]; then echo "Error: STARKNET_ADDRESS not set in .env"; exit 1; fi
+	starkli account fetch $(STARKNET_ADDRESS) --output $(ACCOUNT_FILE)
+
+# 2. Deploy
+# Usage: make starkli-deploy REGISTRY_ADDRESS=0x...
+# Dependencies: Requires 'account.json' (make starkli-account) and the built Sierra file.
+starkli-deploy:
+	@if [ ! -f "$(SIERRA_FILE)" ]; then echo "Error: Sierra file not found at $(SIERRA_FILE). Run 'make build' first."; exit 1; fi
+	@if [ -z "$(REGISTRY_ADDRESS)" ]; then echo "Error: REGISTRY_ADDRESS not set. Usage: make starkli-deploy REGISTRY_ADDRESS=0x..."; exit 1; fi
+	@echo "--- Declaring Class ---"
+	$(eval CLASS_HASH := $(shell starkli declare $(SIERRA_FILE) --account $(ACCOUNT_FILE) --watch | grep -o '0x[0-9a-fA-F]\{63,64\}' | tail -n 1))
+	@echo "Class Hash: $(CLASS_HASH)"
+	@echo "--- Deploying Contract ---"
+	starkli deploy $(CLASS_HASH) $(REGISTRY_ADDRESS) --account $(ACCOUNT_FILE)
