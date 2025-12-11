@@ -4,7 +4,7 @@ version = 1
 [[package]]
 name = "falcon"
 version = "0.1.0"
-source = "git+https://github.com/keep-starknet-strange/s2morrow#fa19d727561eb1bc993286beffcb19e3c043bd1e"
+source = "git+https://github.com/starkware-bitcoin/s2morrow#b3aecfccf8784635a1276e6cff669e23c24c23d2"
 
 [[package]]
 name = "moosh_id"

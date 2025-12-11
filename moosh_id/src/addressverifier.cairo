@@ -125,9 +125,17 @@ pub mod FalconSignatureVerifier {
 
             let msg_hash_part = InternalImpl::get_msg_hash_part(msg_point_span);
 
-            match verify_uncompressed(
-                s1_coeffs_span, pk_coeffs_array.span(), msg_point_span, n_val,
-            ) {
+            let result = if n_val == PK_SIZE_512 {
+                verify_uncompressed::<
+                    512,
+                >(s1_coeffs_span, pk_coeffs_array.span(), msg_point_span, n_val)
+            } else {
+                verify_uncompressed::<
+                    1024,
+                >(s1_coeffs_span, pk_coeffs_array.span(), msg_point_span, n_val)
+            };
+
+            match result {
                 Result::Ok(()) => {
                     let mut keys = array![key_hash];
                     let mut data = array![msg_hash_part];
