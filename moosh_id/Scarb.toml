@@ -15,7 +15,7 @@ falcon = { git = "https://github.com/starkware-bitcoin/s2morrow" }
 openzeppelin = { git = "https://github.com/OpenZeppelin/cairo-contracts.git" }
 
 [dev-dependencies]
-snforge_std = "0.43.1"
+snforge_std = "0.50.0"
 assert_macros = "2.11.4"
 cairo_execute = "2.11.4"
 

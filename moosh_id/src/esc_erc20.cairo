@@ -2,8 +2,7 @@
 mod ESCToken {
     use starknet::ContractAddress;
     use openzeppelin::token::erc20::erc20::{ERC20Component, ERC20HooksEmptyImpl};
-    use core::byte_array::{ByteArray, ByteArrayTrait};
-    use core::string::StringLiteral;
+    use core::byte_array::ByteArray;
 
     // Define a default config for decimals
     struct DefaultConfig {
